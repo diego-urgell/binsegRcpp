@@ -1,3 +1,5 @@
+// Modified to compute changes in mean and variance
+
 #include "binseg_normal.h"
 #include <math.h>//INFINITY
 #include <set>//multiset
@@ -8,9 +10,9 @@
 // one parameter (mean) because the model is normal change in mean
 // with constant variance but there could be more parameters for other
 // models (e.g., normal change in mean and variance).
-class MeanCost {
+class MeanVarCost {
 public:
-  double mean, cost;
+  double mean, cost, var; // Added a double to store the variance
 };
 
 // This class computes and stores the statistics that we need to
@@ -20,15 +22,23 @@ public:
 class Cumsums {
 public:
   std::vector<double> cumsum_vec;
+    // Added a vector to store cumulative sum of squared elements
+  std::vector<double> squared_cumsum_vec;
+
   // computes the cumulative sum vector in linear O(n_data) time.
   void init(const double *data_vec, const int n_data){
     cumsum_vec.resize(n_data);
+    squared_cumsum_vec.resize(n_data);
     double total = 0.0;
+    double squared_total = 0.0;
     for(int data_i=0; data_i<n_data; data_i++){
       total += data_vec[data_i];
+      squared_total += data_vec[data_i]*data_vec[data_i];
       cumsum_vec[data_i] = total;
+      squared_cumsum_vec[data_i] = squared_total; // Fill both sum and squared sum
     }
   }
+
   double get_sum(int first, int last){
     double total = cumsum_vec[last];
     if(0 < first){
@@ -36,20 +46,40 @@ public:
     }
     return total;
   }
-  // Compute/store optimal mean and cost values for a single segment
-  // from first to last in constant O(1) time.
-  void first_last_mean_cost
-  (int first, int last, double *mean, double *cost){
-    double s = get_sum(first, last);
-    int N = last-first+1;
-    *cost = -s*s/N;
-    *mean = s/N;
+
+  // Method to obtain the squared sum given start and end
+  double get_squared_sum(int first, int last){
+      double total = squared_cumsum_vec[last];
+      if(0 < first){
+          total -= squared_cumsum_vec[first-1];
+      }
+      return total;
   }
-  void first_last_mean_cost(int first, int last, MeanCost *mc){
-    first_last_mean_cost(first, last, &(mc->mean), &(mc->cost));
+
+  // Compute/store mean and cost values for a single segment
+  // from first to last in constant O(1) time.
+  void first_last_mean_var_cost
+  (int first, int last, double *mean, double *var, double *cost){
+    double sum = get_sum(first, last);
+    double sum_squared = get_squared_sum(first, last);
+    int N = last-first + 1;
+    *mean = sum/N;
+    // Calculating the variance in constant time
+    *var = (sum_squared - (sum*sum)/N)/N;
+    // Making sure the variance is not zero, so that the log does not
+    // raise an exception
+    if(*var <= 0){*var = nextafter (0.0f, 1.0f);}
+    // Calculating the cost of the segment. The function was modified
+    // so that it becomes the negative log likelihood of the normal
+    // distribution, considering a change in both mean and variance.
+    *cost = 0.5*N*(log(*var) + log(2*M_PI) + 1);
+  }
+
+  void first_last_mean_var_cost(int first, int last, MeanVarCost *mc){
+    first_last_mean_var_cost(first, last, &(mc->mean), &(mc-> var), &(mc->cost));
   }
 };
-/* Above we compute the optimal square loss for a segment with sum of
+/* Before: Above we compute the optimal square loss for a segment with sum of
    data = s and number of data = N.
 
    If x_i is data point i, and s = sum_{i=1}^N x_i is the sum over N
@@ -72,12 +102,12 @@ public:
 class Split {
 public:
   int this_end;//index of last data point on the first/before segment.
-  MeanCost before, after;
-  double set_mean_cost
-  (Cumsums &cumsums, int first, int end_i, int last){
+  MeanVarCost before, after;
+
+  double set_mean_var_cost (Cumsums &cumsums, int first, int end_i, int last){
     this_end = end_i;
-    cumsums.first_last_mean_cost(first, end_i, &before);
-    cumsums.first_last_mean_cost(end_i+1, last, &after);
+    cumsums.first_last_mean_var_cost(first, end_i, &before);
+    cumsums.first_last_mean_var_cost(end_i+1, last, &after);
     return before.cost + after.cost;
   }
 };
@@ -98,12 +128,14 @@ public:
   int invalidates_index, invalidates_after;
   double best_decrease;
   Split best_split;
+
   // Segments are kept sorted by best_decrease value, so that we can
   // find the best segment to split in constant O(1) time.
   friend bool operator<(const Segment& l, const Segment& r)
   {
     return l.best_decrease < r.best_decrease;
   }
+
   // constructor which considers all possible splits from first to
   // last, and then stores the best split and cost decrease.
   Segment
@@ -118,12 +150,13 @@ public:
     int n_candidates = last-first;
     double best_cost_split = INFINITY, cost_split;
     // for loop over all possible splits on this Segment.
-    for(int ci=0; ci<n_candidates; ci++){
-      cost_split = candidate_split.set_mean_cost
-	(cumsums, first, first+ci, last);
+    // Changed the bottom and top limits to (first + 1) and (last -1)
+    // in order to avoid segments of length 0 getting selected.
+    for(int ci=1; ci<n_candidates-1; ci++){
+      cost_split = candidate_split.set_mean_var_cost(cumsums, first, first+ci, last);
       if(cost_split < best_cost_split){
-	best_cost_split = cost_split;
-	best_split = candidate_split;
+	    best_cost_split = cost_split;
+	    best_split = candidate_split;
       }
     }
     best_decrease = best_cost_split - cost_no_split;
@@ -140,7 +173,7 @@ public:
    int invalidates_after, int invalidates_index,
    double cost_no_split)
   {
-    if(first < last){
+    if(first  < last){
       // if it is possible to split (more than one data point on this
       // segment) then insert new segment into the candidates set.
       candidates.emplace
@@ -170,7 +203,8 @@ public:
 int binseg_normal
 (const double *data_vec, const int n_data, const int max_segments,
  int *seg_end, double *cost,
- double *before_mean, double *after_mean, 
+ double *before_mean, double *after_mean,
+ double *before_var, double *after_var, // Added the var vectors to the arguments
  int *before_size, int *after_size, 
  int *invalidates_index, int *invalidates_after){
   if(n_data < max_segments){
@@ -181,11 +215,11 @@ int binseg_normal
   V.cumsums.init(data_vec, n_data);
   // Then store the trivial segment mean/cost (which starts at the
   // first and ends at the last data point).
-  V.cumsums.first_last_mean_cost
-    (0, n_data-1, before_mean, cost);
+  V.cumsums.first_last_mean_var_cost(0, n_data-1, before_mean, before_var, cost);
   before_size[0] = n_data;
   seg_end[0] = n_data-1;
   after_mean[0] = INFINITY;
+  after_var[0] = INFINITY;
   after_size[0] = -2; // unused/missing indicator.
   invalidates_index[0]=-2;
   invalidates_after[0]=-2;
@@ -194,7 +228,7 @@ int binseg_normal
   // For loop over number of segments. During each iteration we find
   // the Segment/split which results in the best cost decrease, store
   // the resulting model parameters, and add new Segment/split
-  // candidates if necessary.
+  // candidates if necessary. Start in index 0 is the trivial segment.
   for(int seg_i=1; seg_i < max_segments; seg_i++){
     // The multiset is a red-black tree which is sorted in increasing
     // order (by best_decrease values), so the first element is always
@@ -202,14 +236,23 @@ int binseg_normal
     std::multiset<Segment>::iterator it = V.candidates.begin();
     const Segment* s = &(*(it));
     // Store cost and model parameters associated with this split.
+      // best_decrease = set_mean_cost - cost_no_split = before.cost + after.cost - cost_no_split
+      // When this is added to the cost of the past segment, we are substracting the cost of the orginal
+      // segment, and adding instead the cost of each one of the two new segments. As the initial cost
+      // is the cost of no segment at all, then this algorithm ensures that the likelihood is obtained at
+      // each step.
     cost[seg_i] = cost[seg_i-1] + s->best_decrease;
     seg_end[seg_i] = s->best_split.this_end;
     before_mean[seg_i] = s->best_split.before.mean;
+    before_var[seg_i] = s -> best_split.before.var; // Modify also the var vector
     after_mean[seg_i] = s->best_split.after.mean;
+    after_var[seg_i] = s -> best_split.after.var;
+
     // Also store invalidates index/after so we know which previous
     // model parameters are no longer used because of this split.
     invalidates_index[seg_i] = s->invalidates_index;
     invalidates_after[seg_i] = s->invalidates_after;
+
     // The sizes below are not strictly necessary to store (they can
     // be derived from start/end) but it makes it easier to analyze
     // the time complexity of the algorithm. Splits which result in

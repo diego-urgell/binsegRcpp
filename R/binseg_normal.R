@@ -1,3 +1,5 @@
+# Modified to compute changes in mean and variance
+
 binseg_normal <- structure(function # Binary segmentation, normal change in mean
 ### Efficient implementation of binary segmentation for change in
 ### mean, max normal likelihood = min square loss. Output includes
@@ -13,10 +15,12 @@ binseg_normal <- structure(function # Binary segmentation, normal change in mean
   ##value<< data.table with a row for each model and columns
   dt <- with(result, data.table(
     segments=1:max.segments,##<< number of parameters
-    loss=sum(data.vec^2)+loss,##<< square loss
+    loss,##<< square loss
     end=end+1L,##<< index of last data point per segment
     before.mean,##<< mean before changepoint
     after.mean=ifelse(after.mean==Inf, NA, after.mean),##<< mean after changepoint
+    before.var,
+    after.var=ifelse(after.var==Inf, NA, after.var), # Variance after changepoint
     before.size,##<< number of data before changepoint
     after.size=na(after.size),##<< number of data after changepoint
     invalidates.index=na(invalidates.index+1L),##<< index of model parameter no longer used after this changepoint is used
@@ -80,7 +84,7 @@ plot.binseg_normal <- function
 }
 
 coef.binseg_normal <- function
-### Compute a data table of segment start/end/mean values for all
+### Compute a data table of segment start/end/mean/var values for all
 ### models given by segments.
 (object,
 ### data.table from binseg_normal.
@@ -89,7 +93,8 @@ coef.binseg_normal <- function
   ...
 ### ignored.
 ){
-  before.mean <- after.mean <- end <- 
+  # Modified to also include the variance.
+  before.mean <- after.mean <- before.var <- after.var <- end <-
     invalidates.after <- invalidates.index <- NULL
   kmax <- nrow(object)
   if(!(
@@ -108,12 +113,18 @@ coef.binseg_normal <- function
     means[
       cum.fit[, .N*invalidates.after+invalidates.index]
     ] <- NA
+    variances <- cum.fit[, c(before.var, after.var)]
+    variances[
+      cum.fit[, .N*invalidates.after+invalidates.index]
+    ] <- NA
     ord <- order(cum.fit$end)
     mean.mat <- matrix(means, 2, byrow=TRUE)[, ord]
+    variance.mat <- matrix(variances, 2, byrow=TRUE)[, ord]
     cum.fit[ord, data.table(
       start=c(1L, end[-.N]+1L),
       end,
-      mean=mean.mat[!is.na(mean.mat)]
+      mean=mean.mat[!is.na(mean.mat)],
+      variance=variance.mat[!is.na(variance.mat)]
     )]
   }, by="segments"]
 ### data.table with one row for each segment.
