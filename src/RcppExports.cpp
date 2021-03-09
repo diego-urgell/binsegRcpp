@@ -7,7 +7,7 @@ using namespace Rcpp;
 
 // rcpp_binseg_normal
 Rcpp::List rcpp_binseg_normal(const Rcpp::NumericVector data_vec, const int kmax);
-RcppExport SEXP _binsegRcpp_rcpp_binseg_normal(SEXP data_vecSEXP, SEXP kmaxSEXP) {
+RcppExport SEXP _binsegRcppMeanVar_rcpp_binseg_normal(SEXP data_vecSEXP, SEXP kmaxSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -19,11 +19,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_binsegRcpp_rcpp_binseg_normal", (DL_FUNC) &_binsegRcpp_rcpp_binseg_normal, 2},
+    {"_binsegRcppMeanVar_rcpp_binseg_normal", (DL_FUNC) &_binsegRcppMeanVar_rcpp_binseg_normal, 2},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_binsegRcpp(DllInfo *dll) {
+RcppExport void R_init_binsegRcppMeanVar(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

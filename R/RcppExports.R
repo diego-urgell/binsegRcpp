@@ -2,6 +2,6 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 rcpp_binseg_normal <- function(data_vec, kmax) {
-    .Call(`_binsegRcpp_rcpp_binseg_normal`, data_vec, kmax)
+    .Call(`_binsegRcppMeanVar_rcpp_binseg_normal`, data_vec, kmax)
 }
 
