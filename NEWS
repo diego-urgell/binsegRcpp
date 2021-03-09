@@ -3,7 +3,7 @@ TODOS
 2021.3.8
 
 Modified the package to compute changes in mean and variance instead of only mean.
-(By Diego Urgell)
+(By Diego Urgell) Renamed to BinsegRcppMeanVar
 
 2021.1.6
 

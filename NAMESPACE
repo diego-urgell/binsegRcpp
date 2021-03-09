@@ -1,4 +1,4 @@
-useDynLib(binsegRcpp, .registration=TRUE)
+useDynLib(binsegRcppMeanVar, .registration=TRUE)
 import(data.table)
 importFrom(Rcpp, evalCpp)
 export(binseg_normal)

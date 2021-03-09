@@ -1,8 +1,8 @@
-Package: binsegRcpp
+Package: binsegRcppMeanVar
 Type: Package
-Title: Efficient Implementation of Binary Segmentation
-Version: 2021.1.6
-Author: Toby Dylan Hocking
+Title: Efficient Implementation of Binary Segmentation for change in mean and variance
+Version: 2021.3.8
+Author: Toby Dylan Hocking, Diego Urgell
 Maintainer: Toby Dylan Hocking <toby.hocking@r-project.org>
 Description: Standard template library 
  containers are used to implement an efficient binary segmentation
@@ -10,7 +10,7 @@ Description: Standard template library
  worst case.
 License: GPL-3
 LinkingTo: Rcpp
-URL: https://github.com/tdhock/binsegRcpp
+URL: https://github.com/diego-urgell/binsegRcppMeanVar
 BugReports: https://github.com/tdhock/binsegRcpp/issues
 Imports: data.table, Rcpp
 Suggests: ggplot2, testthat
